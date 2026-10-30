@@ -1,0 +1,91 @@
+name: SCA - Dependency-Check                               # Nombre que se ve en la pestaña Actions
+
+on:                                                        # Eventos que disparan el workflow
+  push:                                                    # Al hacer push...
+    branches: [main]                                       # ...solo a la rama main
+  pull_request:                                            # Al abrir o actualizar un pull request...
+    branches: [main]                                       # ...que apunte a main
+  workflow_dispatch:                                       # Permite ejecutarlo a mano desde la pestaña Actions
+
+permissions:                                               # Permisos mínimos del GITHUB_TOKEN
+  contents: read                                           # Solo lectura del código del repositorio
+  security-events: write                                   # Necesario para subir el SARIF a Code scanning
+
+jobs:                                                      # Lista de trabajos del workflow
+  dependency-check:                                        # Job principal: análisis SCA
+    runs-on: ubuntu-latest                                 # Máquina virtual Linux de GitHub
+    env:                                                   # Variables de entorno para todo el job
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}              # Clave del NVD tomada del secreto, nunca escrita en el YAML
+    steps:                                                 # Pasos del job, en orden
+      - name: Descargar el código                          # Paso 1: obtener el repositorio
+        uses: actions/checkout@v7                          # Acción oficial para clonar el repo en la máquina virtual
+
+      - name: Preparar Java 17                             # Paso 2: instalar el JDK
+        uses: actions/setup-java@v6                        # Acción oficial para instalar Java
+        with:                                              # Parámetros de la acción
+          distribution: temurin                            # Distribución Eclipse Temurin del JDK
+          java-version: '17'                               # Versión de Java que pide el laboratorio
+
+      - name: Restaurar caché de la base del NVD           # Paso 3: reutilizar la base descargada antes
+        id: nvd-cache                                      # Identificador para usarlo en pasos posteriores
+        uses: actions/cache/restore@v6                     # Solo restaura; el guardado se hace aparte para que corra siempre
+        with:                                              # Parámetros de la caché
+          path: ~/.m2/repository/org/owasp/dependency-check-data   # Carpeta donde el plugin guarda la base del NVD
+          key: nvd-data-${{ runner.os }}-${{ github.run_id }}      # Clave única por ejecución para poder guardar la base actualizada
+          restore-keys: nvd-data-${{ runner.os }}-         # Respaldo: restaura la caché más reciente de este sistema operativo
+
+      - name: Ejecutar Dependency-Check                    # Paso 4: análisis de dependencias
+        run: mvn -B org.owasp:dependency-check-maven:13.0.0:check -Dformat=ALL -DnvdApiKey="$NVD_API_KEY" -DossindexAnalyzerEnabled=false -DfailBuildOnCVSS=9   # check del plugin; -Dformat=ALL genera HTML, XML y SARIF; clave NVD desde el entorno; sin OSS Index; falla si CVSS >= 9
+
+      - name: Guardar caché de la base del NVD             # Paso 5: guardar la base para la próxima ejecución
+        if: always()                                       # Se ejecuta aunque el escaneo haya fallado por severidad
+        uses: actions/cache/save@v6                        # Acción que solo guarda la caché
+        with:                                              # Parámetros de la caché
+          path: ~/.m2/repository/org/owasp/dependency-check-data   # Misma carpeta que se restauró
+          key: nvd-data-${{ runner.os }}-${{ github.run_id }}      # Misma clave única de esta ejecución
+
+      - name: Subir SARIF a Code scanning                  # Paso 6: publicar alertas en Security
+        if: always()                                       # Publica aunque el escaneo haya fallado
+        uses: github/codeql-action/upload-sarif@v4         # Acción oficial que carga SARIF de cualquier herramienta
+        with:                                              # Parámetros de la acción
+          sarif_file: target/dependency-check-report.sarif # Ruta del reporte SARIF generado por el plugin
+          category: dependency-check                       # Categoría que separa estas alertas de otras herramientas
+
+      - name: Guardar reporte HTML                         # Paso 7: dejar el reporte legible descargable
+        if: always()                                       # Guarda el reporte aunque haya fallos
+        uses: actions/upload-artifact@v7                   # Acción oficial para subir artefactos
+        with:                                              # Parámetros del artefacto
+          name: dependency-check-html                      # Nombre del artefacto en la sección Artifacts
+          path: target/dependency-check-report.html        # Reporte legible en el navegador
+          if-no-files-found: error                         # Marca error si el escaneo no generó el reporte
+
+      - name: Guardar reporte XML                          # Paso 8: dejar el reporte importable descargable
+        if: always()                                       # Guarda el reporte aunque haya fallos
+        uses: actions/upload-artifact@v7                   # Acción oficial para subir artefactos
+        with:                                              # Parámetros del artefacto
+          name: dependency-check-xml                       # Nombre del artefacto en la sección Artifacts
+          path: target/dependency-check-report.xml         # Reporte para importar en DefectDojo
+          if-no-files-found: error                         # Marca error si el escaneo no generó el reporte
+
+  sbom:                                                    # Job extra: genera el SBOM CycloneDX
+    runs-on: ubuntu-latest                                 # Máquina virtual Linux de GitHub
+    steps:                                                 # Pasos del job, en orden
+      - name: Descargar el código                          # Paso 1: obtener el repositorio
+        uses: actions/checkout@v7                          # Acción oficial para clonar el repo
+
+      - name: Preparar Java 17                             # Paso 2: instalar el JDK
+        uses: actions/setup-java@v6                        # Acción oficial para instalar Java
+        with:                                              # Parámetros de la acción
+          distribution: temurin                            # Distribución Eclipse Temurin del JDK
+          java-version: '17'                               # Versión de Java que pide el laboratorio
+          cache: maven                                     # Cachea el repositorio de Maven para acelerar este job
+
+      - name: Generar SBOM CycloneDX                       # Paso 3: crear el inventario de componentes
+        run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json   # Genera target/bom.json
+
+      - name: Guardar SBOM                                 # Paso 4: dejar el SBOM descargable
+        uses: actions/upload-artifact@v7                   # Acción oficial para subir artefactos
+        with:                                              # Parámetros del artefacto
+          name: sbom-cyclonedx                             # Nombre del artefacto en la sección Artifacts
+          path: target/bom.json                            # Archivo SBOM generado
+          if-no-files-found: error                         # Marca error si no se generó el SBOM
