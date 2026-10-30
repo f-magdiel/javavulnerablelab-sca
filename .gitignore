@@ -10,3 +10,4 @@ target/
 # Reportes locales de Dependency-Check
 reports/
 dependency-check-report.*
+.env
