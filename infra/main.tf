@@ -63,6 +63,11 @@ resource "aws_instance" "app" {
 }
 
 resource "aws_s3_bucket" "logs" {
+  # Excepción única del repositorio. Se acepta el riesgo porque este bucket solo
+  # guarda logs de acceso de un entorno de laboratorio, sin datos de producción,
+  # y replicarlo a otra región duplicaría costo sin reducir un riesgo real.
+  # Aprobó: Responsable de seguridad de la materia | Ref: SEC-001 | Vence: 2027-03-31
+  # checkov:skip=CKV_AWS_144: Logs de laboratorio sin datos sensibles; aprobado SEC-001; vence 2027-03-31
   tags = {
     owner = "equipo-jvl"
   }
