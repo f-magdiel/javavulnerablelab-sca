@@ -16,13 +16,15 @@ resource "aws_security_group" "web" {
   description = "Acceso web y administracion"
 
   ingress {
+    description = "SSH solo desde la red interna"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   ingress {
+    description = "Aplicacion web"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
@@ -30,9 +32,10 @@ resource "aws_security_group" "web" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "Salida solo por HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
