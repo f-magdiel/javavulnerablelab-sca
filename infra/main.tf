@@ -44,6 +44,14 @@ resource "aws_instance" "app" {
   ami                    = "ami-0c02fb55956c7d316"
   instance_type          = "t3.micro"
   vpc_security_group_ids = [aws_security_group.web.id]
+  monitoring             = true
+  ebs_optimized          = true
+  iam_instance_profile   = aws_iam_instance_profile.app.name
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
 
   root_block_device {
     encrypted = true
@@ -175,4 +183,22 @@ resource "aws_s3_bucket_notification" "logs" {
     topic_arn = aws_sns_topic.eventos_logs.arn
     events    = ["s3:ObjectRemoved:*"]
   }
+}
+
+resource "aws_iam_role" "app" {
+  name = "jvl-app"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "app" {
+  name = "jvl-app"
+  role = aws_iam_role.app.name
 }
