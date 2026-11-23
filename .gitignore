@@ -11,3 +11,5 @@ target/
 reports/
 dependency-check-report.*
 .env
+
+reportes/

@@ -1,0 +1,44 @@
+name: Seguridad IaC
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  security-events: write # necesario para subir SARIF
+jobs:
+  iac:
+    name: Escaneo IaC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # Versiones fijas: el resultado del escaneo es reproducible y una
+      # actualización de reglas no rompe el pipeline sin que lo decidamos.
+      - name: Instalar herramientas con versión fija
+        run: pip install checkov==3.4.5 ansible-core==2.22.0 ansible-lint==26.11.0
+      # 1) Reporte: no bloquea, solo genera reportes/results_sarif.sarif
+      - name: Checkov - reporte SARIF
+        run: |
+          checkov -d infra -d ansible -d docker \
+            --external-checks-dir politicas \
+            -o sarif --output-file-path reportes --soft-fail
+      - name: Publicar en Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reportes/results_sarif.sarif
+          category: checkov
+      # 2) Gates: si fallan, el job falla y el PR no se puede fusionar
+      - name: Gate Checkov
+        run: |
+          checkov -d infra -d ansible -d docker \
+            --external-checks-dir politicas --compact --quiet
+      - name: Validar sintaxis de Ansible
+        run: ansible-playbook -i ansible/inventory.ini ansible/site.yml --syntax-check
+      - name: Gate ansible-lint (perfil production)
+        run: ansible-lint --profile production ansible/
