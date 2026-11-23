@@ -1,21 +1,26 @@
-- hosts: web
+- name: Preparar servidor de aplicacion
+  hosts: web
   become: true
+  vars:
+    # El hash se entrega por variable de entorno; no se guarda en el repositorio.
+    jvl_password_hash: "{{ lookup('ansible.builtin.env', 'JVL_PASSWORD_HASH') }}"
   tasks:
     - name: Instalar paquetes
-      apt:
+      ansible.builtin.apt:
         name: [curl, openjdk-8-jdk]
-        state: latest
+        state: present
 
     - name: Descargar script
-      get_url:
-        url: http://example.com/setup.sh
+      ansible.builtin.get_url:
+        url: https://example.com/setup.sh
         dest: /opt/setup.sh
-        mode: 0777
+        mode: "0750"
 
     - name: Ejecutar script
-      shell: /opt/setup.sh
+      ansible.builtin.command: /opt/setup.sh
+      changed_when: false
 
     - name: Crear usuario de aplicacion
-      user:
+      ansible.builtin.user:
         name: jvl
-        password: "jvl1234"
+        password: "{{ jvl_password_hash }}"
