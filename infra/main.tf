@@ -41,6 +41,10 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_instance" "app" {
+  tags = {
+    owner = "equipo-jvl"
+  }
+
   ami                    = "ami-0c02fb55956c7d316"
   instance_type          = "t3.micro"
   vpc_security_group_ids = [aws_security_group.web.id]
@@ -59,10 +63,18 @@ resource "aws_instance" "app" {
 }
 
 resource "aws_s3_bucket" "logs" {
+  tags = {
+    owner = "equipo-jvl"
+  }
+
   bucket = "jvl-logs-demo"
 }
 
 resource "aws_db_instance" "mysql" {
+  tags = {
+    owner = "equipo-jvl"
+  }
+
   identifier          = "jvl-db"
   engine              = "mysql"
   instance_class      = "db.t3.micro"
