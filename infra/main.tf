@@ -52,7 +52,6 @@ resource "aws_instance" "app" {
 
 resource "aws_s3_bucket" "logs" {
   bucket = "jvl-logs-demo"
-  acl    = "public-read"
 }
 
 resource "aws_db_instance" "mysql" {
@@ -92,5 +91,60 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
       sse_algorithm     = "aws:kms"
       kms_master_key_id = aws_kms_key.datos.arn
     }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket                  = aws_s3_bucket.logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_logging" "logs" {
+  bucket        = aws_s3_bucket.logs.id
+  target_bucket = aws_s3_bucket.logs.id
+  target_prefix = "acceso/"
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    id     = "expirar-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 365
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+resource "aws_sns_topic" "eventos_logs" {
+  name              = "jvl-eventos-logs"
+  kms_master_key_id = aws_kms_key.datos.id
+}
+
+resource "aws_s3_bucket_notification" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  topic {
+    topic_arn = aws_sns_topic.eventos_logs.arn
+    events    = ["s3:ObjectRemoved:*"]
   }
 }
