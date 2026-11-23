@@ -46,7 +46,7 @@ resource "aws_instance" "app" {
   vpc_security_group_ids = [aws_security_group.web.id]
 
   root_block_device {
-    encrypted = false
+    encrypted = true
   }
 }
 
@@ -63,6 +63,34 @@ resource "aws_db_instance" "mysql" {
   username            = "admin"
   password            = "Cambiar123!"
   publicly_accessible = true
-  storage_encrypted   = false
+  storage_encrypted   = true
   skip_final_snapshot = true
+}
+
+resource "aws_kms_key" "datos" {
+  description         = "Clave para cifrar datos de JavaVulnerableLab"
+  enable_key_rotation = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AdministracionDeLaCuenta"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.actual.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+}
+
+data "aws_caller_identity" "actual" {}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.datos.arn
+    }
+  }
 }
