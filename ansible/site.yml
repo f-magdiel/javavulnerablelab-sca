@@ -1,0 +1,21 @@
+- hosts: web
+  become: true
+  tasks:
+    - name: Instalar paquetes
+      apt:
+        name: [curl, openjdk-8-jdk]
+        state: latest
+
+    - name: Descargar script
+      get_url:
+        url: http://example.com/setup.sh
+        dest: /opt/setup.sh
+        mode: 0777
+
+    - name: Ejecutar script
+      shell: /opt/setup.sh
+
+    - name: Crear usuario de aplicacion
+      user:
+        name: jvl
+        password: "jvl1234"
