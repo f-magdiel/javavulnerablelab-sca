@@ -27,5 +27,13 @@ COPY default-tomcat.xml /usr/local/tomcat/conf/tomcat-users.xml
 
 ENV CATALINA_OPTS="-Xms256m -Xmx1024m"
 
+# Ejecutar Tomcat con un usuario sin privilegios
+RUN groupadd -r tomcat && useradd -r -g tomcat tomcat && \
+    chown -R tomcat:tomcat /usr/local/tomcat
+USER tomcat
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -fs http://localhost:8080/ || exit 1
+
 # CMD to start Tomcat
 CMD ["catalina.sh", "run"]
