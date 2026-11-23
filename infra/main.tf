@@ -61,9 +61,37 @@ resource "aws_db_instance" "mysql" {
   allocated_storage   = 20
   username            = "admin"
   password            = "Cambiar123!"
-  publicly_accessible = true
+  publicly_accessible = false
   storage_encrypted   = true
   skip_final_snapshot = true
+
+  multi_az                            = true
+  deletion_protection                 = true
+  iam_database_authentication_enabled = true
+  auto_minor_version_upgrade          = true
+  copy_tags_to_snapshot               = true
+  backup_retention_period             = 7
+  enabled_cloudwatch_logs_exports     = ["error", "general", "slowquery"]
+  monitoring_interval                 = 60
+  monitoring_role_arn                 = aws_iam_role.rds_monitoreo.arn
+}
+
+resource "aws_iam_role" "rds_monitoreo" {
+  name = "jvl-rds-monitoreo"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "monitoring.rds.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoreo" {
+  role       = aws_iam_role.rds_monitoreo.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
 resource "aws_kms_key" "datos" {
